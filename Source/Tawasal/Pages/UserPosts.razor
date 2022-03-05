@@ -1,0 +1,147 @@
+﻿@page "/userposts/{id}"
+@attribute [Authorize]
+<PageTitle>All user posts</PageTitle>
+
+@using Tawasal.Data
+@using Tawasal.ViewModels
+@using Tavenem.Blazor.IndexedDB
+@using Application.Interfaces
+@inject IUserService _userService
+@inject IndexedDbService<string>? _indexedDbService
+@inject IConfiguration _configuration;
+<h1>All user posts</h1>
+
+
+
+@if (userPosts == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <p>UpdatedAt: @userPosts.GotAt</p>
+    @*    <div class="form-group" style="width:300px">
+        <label for="Limit">Limit</label>
+        <select id="Limit" @onchange="Refresh" class="form-control">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        </select>
+        </div>*@
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-10 col-xl-10 col-md-9 col-sm-12 col-xs-12 allpostsdiv">
+                <section class="details-card">
+                    <div class="container">
+                        <div class="row">
+                            @foreach (var userPost in userPosts.data)
+                            {
+                                <div class="col-xl-4 col-lg-4 col-md-6 col-sm-12 col-12">
+                                    <div class="card-content">
+
+                                        <div class="card-header">
+                                            <h3><img src="@userPost.owner.picture"> @(@userPost.owner.title+". "+userPost.owner.firstName + " " +userPost.owner.lastName)</h3>
+
+                                            <div>@userPost.publishDate
+                                            </div>
+
+                                        </div>
+
+                                        <div class="card-img">
+
+                                            <img src="@userPost.image">
+
+                                            <span>
+                                                <h4>
+                                                    <div class="likes-count"><img src="/img/like.svg" class="w-5 mr-2 float-left like" alt="like">@userPost.likes</div>
+                                                </h4>
+                                            </span>
+
+                                        </div>
+                                        <div class="card-desc">
+                                            @*<h3>@(userPost.owner.firstName + " " +userPost.owner.lastName)</h3>*@
+                                            <h3>@userPost.publishDate</h3>
+                                            @foreach (var tag in userPost.tags)
+                                            {
+                                                <button type="button" class="btn">@tag</button>
+                                            }
+                                            <div>
+                                                @userPost.text
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+}
+
+@code {
+    [Parameter]
+    public string Id { get; set; }
+
+    private int Count { get; set; } = 10;
+
+    private async Task Refresh(ChangeEventArgs e)
+    {
+        Count = Convert.ToInt32(e.Value.ToString());
+        await GetUserPostsAsync();
+    }
+
+    private Application.Models.UserPosts? userPosts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetUserPostsAsync();
+    }
+
+    private async Task GetUserPostsAsync()
+    {
+        try
+        {
+            var existingItem = await _indexedDbService.GetValueAsync<IndexedDBItem>(Id);
+            if (existingItem != null)
+                userPosts = System.Text.Json.JsonSerializer.Deserialize<Application.Models.UserPosts>(existingItem.Value);
+
+            int userPostsIndexedDBExpirationTimeInMinutes = 5;
+            int.TryParse(_configuration["AppSettings:UserPostsIndexedDBExpirationTimeInMinutes"], out userPostsIndexedDBExpirationTimeInMinutes);
+
+            if (userPosts == null || userPosts?.data == null)
+            {
+                userPosts = await _userService.GetUserPostsAsync(Id, Convert.ToInt32(Count));
+                string userPostsStr = System.Text.Json.JsonSerializer.Serialize(userPosts);
+                await _indexedDbService
+                .AddValueAsync(new IndexedDBItem
+                    {
+                        Id = Id,
+                        Value = userPostsStr
+                    })
+                .ConfigureAwait(false);
+            }
+            else if (DateTime.Now.Subtract(userPosts.GotAt).TotalMinutes > userPostsIndexedDBExpirationTimeInMinutes)
+            {
+                userPosts = await _userService.GetUserPostsAsync(Id, Convert.ToInt32(Count));
+                string userPostsStr = System.Text.Json.JsonSerializer.Serialize(userPosts);
+
+                await _indexedDbService
+                .PutValueAsync(new IndexedDBItem
+                    {
+                        Id = Id,
+                        Value = userPostsStr
+                    })
+                .ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            //silent catch
+        }
+    }
+}

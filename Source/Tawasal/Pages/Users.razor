@@ -1,0 +1,55 @@
+﻿@page "/"
+@attribute [Authorize]
+<PageTitle>All userst</PageTitle>
+
+@using Tawasal.Data
+@using Tawasal.ViewModels
+@using Application.Interfaces
+@using Application.Models
+@inject IUserService userService
+
+<h1>User service</h1>
+
+
+@if (users == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>picture</th>
+                <th>id</th>
+                <th>title</th>
+                <th>firstName</th>
+                <th>lastName</th>
+                <th>user posts</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in users.data)
+            {
+                <tr>
+                    <td><img src="@user.picture" width=100 height=100 /></td>
+                    <td>@user.id</td>
+                    <td>@user.title</td>
+                    <td>@user.firstName</td>
+                    <td>@user.lastName</td>
+
+                    <td><a href="/userposts/@user.id">user posts</a> </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private UsersData? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await userService.GetUsersAsync(10);
+    }
+}
